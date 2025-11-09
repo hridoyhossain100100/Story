@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Dashboard</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <style>
+
+        /* === এই কোডটুকু <style> ট্যাগের ভেতরে যোগ করুন === */
+
+/* --- Pop-up Modal Style --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7); /* ডার্ক ওভারলে */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000; /* সবকিছুর উপরে থাকবে */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background-color: var(--card-bg);
+    padding: 2rem 2.5rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+    position: relative;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay.active .modal-content {
+    transform: scale(1);
+}
+
+.modal-content h2 {
+    margin-top: 0;
+    color: var(--mint); /* আপনার থিমের 'Success' রঙ */
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.modal-content p {
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+    margin-bottom: 0;
+}
+
+.close-modal-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 2rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.close-modal-btn:hover {
+    color: var(--white);
+}
+
+        /* === এই কোডটুকু <style> ট্যাগের ভেতরে যোগ করুন === */
+
+/* ১. পার্টিকেলসকে ব্যাকগ্রাউন্ডে ফিক্সড করার জন্য */
+#particles-background {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    z-index: 0; /* পার্টিকেলসকে পেছনে রাখা হলো */
+}
+
+/* ২. আপনার সাইডবারকে পার্টিকেলসের উপরে আনার জন্য */
+.sidebar {
+    position: relative; /* এটি আবশ্যক */
+    z-index: 2; /* পার্টিকেলসের (0) উপরে রাখা হলো */
+}
+
+/* ৩. আপনার মূল কন্টেন্টকে পার্টিকেলসের উপরে আনার জন্য */
+.main-content {
+    position: relative; /* এটি আবশ্যক */
+    z-index: 1; /* পার্টিকেলসের (0) উপরে রাখা হলো */
+}
+        /* --- গুগল ফন্ট ইম্পোর্ট --- */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+        /* --- কালার প্যালেট --- */
+        :root {
+            --black: #000000;
+            --white: #FFFFFF;
+            --true-blue: #1380F6;
+            --navy: #192032;
+            --sky-blue: #41B5FF;
+            --mint: #99F3FB;
+            --light-blue: #81CEFF;
+            
+            --sidebar-bg: var(--black);
+            --main-bg: #121212;
+            --card-bg: #1A1A1A;
+            --text-primary: var(--white);
+            --text-secondary: #BBBBBB;
+            --border-color: #333333;
+            
+            --primary-action-color: var(--true-blue);
+            --danger-color: var(--navy);
+            --success-color: var(--mint);
+        }
+
+        /* --- বেসিক রিসেট --- */
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--main-bg);
+            color: var(--text-primary);
+            box-sizing: border-box;
+            overflow-x: hidden;
+        }
+        *, *:before, *:after {
+            box-sizing: border-box;
+        }
+
+        /* --- মূল লেআউট --- */
+        .page-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* --- মোবাইল নেভিগেশন বার --- */
+        .navbar {
+            display: none; 
+            background-color: var(--sidebar-bg);
+            padding: .2rem 1rem;
+            border-bottom: px solid var(--border-color);
+            justify-content: space-between;
+            align-items: center;
+        }
+        .navbar-brand {
+            font-size: 1.0rem;
+            font-weight: 300;
+            color: var(--text-light);
+        }
+        #mobile-menu-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.15rem;
+        }
+        #mobile-menu-btn svg { 
+            width: 24px;
+            height: 15px;
+            stroke: var(--text-light);
+        }
+
+        /* --- সাইডবার (ডেস্কটপ) --- */
+        .sidebar {
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            padding: 1.5rem;
+            position: fixed;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+        }
+        .sidebar-header {
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-align: center;
+            padding-bottom: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .sidebar-header a {
+            color: var(--text-light);
+            text-decoration: none;
+        }
+        .sidebar-nav {
+            list-style: none;
+            padding: 0;
+            margin-top: 2rem;
+        }
+        .sidebar-nav li {
+            margin-bottom: 0.5rem;
+        }
+        .sidebar-nav a {
+            display: block;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .sidebar-nav a:hover {
+            background-color: #333333;
+            color: var(--white);
+        }
+        .sidebar-nav a.active {
+            background-color: var(--primary-action-color);
+            color: var(--text-light);
+            font-weight: 700;
+        }
+        #logout-btn {
+            background-color: var(--card-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 700;
+            transition: all 0.2s ease;
+            margin-top: auto;
+        }
+        #logout-btn:hover {
+            background-color: #333333;
+            border-color: #555555;
+            color: var(--white);
+        }
+
+
+        /* --- মেইন কন্টেন্ট --- */
+        .main-content {
+            margin-left: 260px;
+            flex: 1;
+            padding: 1.5rem 2rem;
+        }
+        
+        h2 {
+            font-size: 1.rem;
+            font-weight: 00;
+            margin-top: -1;
+            margin-bottom: 1rem;
+            color: var(--white);
+        }
+
+        /* --- কার্ড লেআউট --- */
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            border: .2px solid var(--border-color);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .card-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--white);
+        }
+        
+        /* --- গ্রিড লেআউট --- */
+        .content-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+        }
+        
+        /* --- স্ট্যাটাস কার্ড CSS --- */
+        .stat-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-cards .card {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+        }
+        .stat-cards .card h3 {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        .stat-cards .card p {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0;
+            color: var(--true-blue);
+        }
+        .stat-cards .card .status-icon {
+            color: var(--mint);
+            font-size: 1.2rem;
+        }
+
+        /* --- প্লেয়ার লিস্ট --- */
+        #player-list {
+            max-height: 450px;
+            overflow-y: auto;
+        }
+
+        .player-item {
+            display: block; 
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            background-color: var(--main-bg);
+            transition: all 0.2s ease;
+        }
+        .player-item:hover { border-color: #555; }
+        
+        .player-item-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
+        .player-info {
+            flex-grow: 1;
+        }
+        .player-bid-action {
+            flex-shrink: 0;
+            width: 200px;
+        }
+        
+        .player-item-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .player-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--border-color);
+        }
+        .player-info h3 { font-size: 1.1rem; margin: 0; color: var(--white); }
+        .player-info p { 
+            margin: 0.25rem 0;
+            font-size: 0.85rem; 
+            color: var(--text-secondary); 
+        }
+        .player-info .price { font-weight: 700; color: var(--sky-blue); }
+        .player-info .highest-bidder { font-weight: 700; color: var(--mint); }
+        .player-info .category {
+            font-style: normal; color: var(--text-primary);
+            background-color: #333; padding: 3px 8px;
+            border-radius: 5px; font-size: 0.8rem; font-weight: 500;
+        }
+
+        /* --- বিড ফর্ম --- */
+        .bid-form { display: flex; flex-direction: column; margin-top: 1rem; gap: 0.5rem; }
+        .bid-input {
+            width: 100%;
+            padding: 0.75rem; 
+            border: 1px solid var(--border-color);
+            border-radius: 6px; 
+            font-family: 'Inter', sans-serif;
+            background-color: #333; 
+            color: var(--text-primary);
+            box-sizing: border-box;
+        }
+        .bid-button {
+            width: 100%;
+            padding: 0.75rem; 
+            border: none;
+            background-color: var(--primary-action-color); 
+            color: var(--white);
+            cursor: pointer; 
+            border-radius: 6px;
+            font-weight: 700; 
+            transition: all 0.2s ease;
+        }
+        .bid-button:hover { background-color: #0E6DD7; }
+        .bid-message { font-size: 0.9rem; margin-top: 0.5rem; }
+        .message { margin-top: 1rem; font-weight: 500; display: none; text-align: center; }
+        .success { color: var(--mint); }
+        .error { color: var(--navy); }
+
+
+        /* --- লাইভ ফিড (ডান সাইডবার) --- */
+        .sidebar-right {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        #log-container {
+            flex-grow: 1;
+            height: 250px;
+            overflow-y: scroll;
+            background-color: var(--black);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        #log-container p { margin: 0 0 0.5rem 0; }
+        #log-container .log-sold { color: var(--mint); font-weight: bold; }
+        #log-container .log-bid { color: var(--light-blue); }
+        #log-container .log-start { color: var(--sky-blue); }
+        
+        #timer-display {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--true-blue);
+            text-align: center;
+            margin-bottom: 0.5rem;
+            display: none;
+        }
+        #timer-player-name {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        
+        /* --- টিম বাজেট লিস্ট --- */
+        #team-list { text-align: left; }
+        .team-item {
+            display: flex; justify-content: space-between;
+            padding: 0.75rem 0.25rem; border-bottom: 1px solid var(--border-color);
+            font-weight: 500;
+        }
+        .team-item span:first-child { color: var(--text-secondary); }
+        .team-item span:last-child { font-weight: 700; color: var(--text-primary); }
+
+        /* --- PDF ডাউনলোড বাটন --- */
+        #download-pdf-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #download-pdf-btn:hover {
+            background-color: var(--border-color);
+            color: var(--white);
+        }
+
+
+        /* --- মোবাইল রেসপন্সিভ --- */
+        @media (max-width: 900px) {
+            .page-container {
+                flex-direction: column;
+      /* === নতুন সমাধান: মোবাইল ভিউতে গ্যাপ কমানো === */
+            .main-content h2 {
+                margin-bottom: 0.75rem; /* আগে 1.5rem ছিল */
+            }
+            .stat-cards {
+                margin-bottom: 0.2rem; /* আগে 1.5rem ছিল */
+            }
+            .card {
+                margin-bottom: 0.2rem; /* আগে 1.5rem ছিল */
+            }
+            /* === সমাধান: মোবাইল প্লেয়ার লিস্টের উচ্চতা কমানো === */
+            #player-list {
+                max-height: 300px; /* উচ্চতা কমিয়ে 250px করা হলো */
+            }
+            /* === সমাধান শেষ === */
+            }
+            .navbar {
+                display: flex;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                z-index: 1000;
+            }
+            .sidebar {
+                display: none;
+                position: fixed; 
+                top: 61px; 
+                left: 0;
+                width: 100%;
+                height: calc(100% - 61px); 
+                z-index: 999;
+            }
+            .sidebar.active {
+                display: flex;
+            }
+            .main-content {
+                margin-left: 0;
+                padding-top: 1.5rem;
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+
+            /* === সমাধান: মোবাইল স্ট্যাটাস কার্ড (১ লাইনে) === */
+            .stat-cards {
+                grid-template-columns: repeat(4, 1fr); /* মোবাইলে ৪ কলাম */
+                gap: 0.rem; /* গ্যাপ কমানো হলো */
+            }
+            .stat-cards .card {
+                padding: 0.2rem 0.2rem; /* প্যাডিং কমানো হলো */
+                min-height: 80px; /* একটি ন্যূনতম উচ্চতা */
+            }
+            .stat-cards .card h3 {
+                font-size: 0.6rem; /* ফন্ট ছোট করা হলো */
+                margin-bottom: 0.25rem;
+            }
+            .stat-cards .card p {
+                font-size: 1.5rem; /* নম্বর ফন্ট ছোট করা হলো */
+            }
+            .stat-cards .card .status-icon {
+                font-size: 0.8rem; /* আইকন ছোট করা হলো */
+            }
+            /* === সমাধান শেষ === */
+            
+            #logout-btn {
+                display: none;
+            }
+            #mobile-logout-btn {
+                background-color: var(--card-bg);
+                color: var(--text-primary);
+                border: 1px solid var(--border-color);
+                padding: 0.75rem 1.5rem;
+                border-radius: px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                font-weight: 700;
+                margin-top: rem;
+                width: 100%;
+            }
+            .player-item-content {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .player-bid-action {
+                width: 100%;
+                margin-top: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sold-popup" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-modal-btn" id="close-popup-btn">&times;</span>
+            <h2 id="popup-player-name">Player Sold!</h2>
+            <p id="popup-sold-details">Sold to [Team Name] for [$Price]</p>
+        </div>
+    </div>
+    <div class="dashboard-container">
+    <div id="particles-background"></div>
+    
+    <div class="dashboard-container">
+
+    <div class="page-container">
+        
+        <nav class="navbar">
+            <div class="navbar-brand">Team Dashboard</div>
+            <button id="mobile-menu-btn">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 6H20M4 12H20M4 18H20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </nav>
+
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <a href="#">Team Dashboard</a>
+            </div>
+            <ul class="sidebar-nav">
+                <li><a href="#available-players-section" class="active">Available Players</a></li>
+                <li><a href="#live-feed-section">Live Auction Feed</a></li>
+                <li><a href="#my-players-section">My Purchased Players</a></li>
+                <li><a href="#team-list-section">Team Budgets</a></li>
+            </ul>
+            <button id="logout-btn">Logout</button>
+            <button id="mobile-logout-btn" style="display: none;">Logout</button>
+        </nav>
+
+        <div class="main-content">
+            
+            <h2 id="welcome-message">Welcome, Team Owner</h2>
+            <div id="team-status-message" class="message success" style="display: block; text-align: left; margin-top: -1rem; margin-bottom: 1.5rem;">Loading team status...</div>
+            
+            <div class="stat-cards">
+                <div class="card">
+                    <h3>Total Players</h3>
+                    <p id="stat-total-players">0</p>
+                    <span class="status-icon">▲</span> 
+                </div>
+                <div class="card">
+                    <h3>Live Auctions</h3>
+                    <p id="stat-live-auctions">0</p>
+                    <span class="status-icon">●</span> 
+                </div>
+                <div class="card">
+                    <h3>Players Sold</h3>
+                    <p id="stat-players-sold">0</p>
+                    <span class="status-icon">✓</span> 
+                </div>
+                 <div class="card">
+                    <h3>Registered Teams</h3>
+                    <p id="stat-registered-teams">0</p>
+                    <span class="status-icon">★</span> 
+                </div>
+            </div>
+            <div class="content-grid">
+                
+                <div class="card" id="available-players-section">
+                    <div class="card-header">
+                        <h3>Available Players for Auction</h3>
+                    </div>
+                    <div id="player-list">
+                        <p>Loading players...</p>
+                    </div>
+                </div>
+
+                <div class="sidebar-right">
+                    
+                    <div class="card" id="live-feed-section">
+                        <div class="card-header">
+                            <h3>Live Auction Feed</h3>
+                        </div>
+                        <div id="live-feed-container">
+                            <div id="timer-display">00:00</div>
+                            <div id="timer-player-name">No player is currently being auctioned.</div>
+                            <div id="log-container">
+                                <p>Connecting to auction server...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" id="my-players-section">
+                        <div class="card-header">
+                            <h3>My Purchased Players</h3>
+                            <button id="download-pdf-btn">Download PDF</button>
+                        </div>
+                        <div id="my-player-list">
+                            <p>Loading your players...</p>
+                        </div>
+                    </div>
+
+                    <div class="card" id="team-list-section">
+                        <div class="card-header">
+                            <h3>Team Budgets</h3>
+                        </div>
+                        <div id="team-list">
+                            <p>Loading team budgets...</p>
+                        </div>
+                    </div>
+<script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+    <script src="particles-config.js"></script> <script src="team.js"></script>
+                </div> </div> </div> </div> <script src="team.js"></script>
+</body>
+</html>
